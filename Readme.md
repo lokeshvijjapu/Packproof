@@ -1,6 +1,6 @@
----
 
-# 📘 **PackProof Raspberry Pi Kiosk System – Updated README**
+
+# 📘 **PackProof Raspberry Pi Kiosk System **
 
 This repository contains the complete codebase for the **PackProof Raspberry Pi Kiosk System**, designed for:
 
@@ -11,7 +11,7 @@ This repository contains the complete codebase for the **PackProof Raspberry Pi 
 * Offline-safe operation with UPS
 * Safe shutdown + automatic restart using MOSFET auto-ON circuit
 
----
+
 
 # 📁 **Project Structure**
 
