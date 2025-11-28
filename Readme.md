@@ -1,13 +1,3 @@
-Perfect — now that everything is confirmed, here is your **fully updated, clean, professional README**, including:
-
-* Correct launcher service (using `display-manager.service`)
-* Correct power monitor service
-* Your IRL540N MOSFET auto-ON circuit
-* Updated boot sequence
-* All improvements you applied
-
-You can copy this entire README and replace your old one.
-
 ---
 
 # 📘 **PackProof Raspberry Pi Kiosk System – Updated README**
