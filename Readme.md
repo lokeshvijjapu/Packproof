@@ -1,6 +1,6 @@
 
 
-# 📘 **PackProof Raspberry Pi Kiosk System **
+# 📘 PackProof Raspberry Pi Kiosk System 
 
 This repository contains the complete codebase for the **PackProof Raspberry Pi Kiosk System**, designed for:
 
@@ -166,7 +166,7 @@ sudo systemctl enable power_monitor.service
 ---
 
 # 🔥 **Safe Power Monitor Logic**
----
+
 
 ```md
 ## 🟦 GPIO26 — Mains Power Detection Input
@@ -204,7 +204,7 @@ This UPS module uses **reverse logic**:
 
 The divider protects the GPIO and ensures stable detection.
 
----
+
 
 ### ✔ Benefits of the 100kΩ + 7.3kΩ Divider
 
@@ -213,7 +213,7 @@ The divider protects the GPIO and ensures stable detection.
 - Prevents false triggering
 - Fully isolated from UPS circuitry
 
----
+
 
 ### 🧲 GPIO26 Wiring Diagram
 
@@ -223,7 +223,7 @@ UPS IN+ (5V) ───► 100kΩ ───► GPIO26 ───► 7.3kΩ ──�
 
 ```
 
----
+
 
 ### 🧠 Logic Used in `power_monitor.py`
 
