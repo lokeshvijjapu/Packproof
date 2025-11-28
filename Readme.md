@@ -168,7 +168,7 @@ sudo systemctl enable power_monitor.service
 # 🔥 **Safe Power Monitor Logic**
 
 
-```md
+
 ## 🟦 GPIO26 — Mains Power Detection Input
 
 Your UPS provides **IN+ = 5V only when mains power is present**.  
@@ -217,11 +217,10 @@ The divider protects the GPIO and ensures stable detection.
 
 ### 🧲 GPIO26 Wiring Diagram
 
-```
 
 UPS IN+ (5V) ───► 100kΩ ───► GPIO26 ───► 7.3kΩ ───► GND
 
-```
+
 
 
 
@@ -230,8 +229,8 @@ UPS IN+ (5V) ───► 100kΩ ───► GPIO26 ───► 7.3kΩ ──�
 - **GPIO26 = HIGH (1)** → Mains power is **present**
 - **GPIO26 = LOW (0)** → **Power loss detected**, start shutdown countdown
 
----
-```
+
+
 
 ---
 `power_monitor.py`:
@@ -256,7 +255,7 @@ System will Shut Down Safely.
 
 ---
 
-# 🔌 **IRL540N MOSFET Auto-ON Circuit **
+# 🔌 IRL540N MOSFET Auto-ON Circuit 
 
 This circuit ensures:
 
