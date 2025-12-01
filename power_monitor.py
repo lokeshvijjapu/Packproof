@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-# Power Monitor with 10-second shutdown + fullscreen popup
+# Power Monitor with animated shutdown screen + VIDEO RECOVERY (FULLY ROBUST)
 
 import lgpio
 import time
 import subprocess
 import os
 import sys
+import threading
+import json
 from datetime import datetime
+
 
 CHIP = 0
 POWER_PIN = 26
-TIMEOUT_SECONDS = 10     # 10 SEC SHUTDOWN DELAY
+TIMEOUT_SECONDS = 1      # shutdown delay
+
+VIDEO_DIR = "/home/neonflake/packproof/videos"
+UPLOAD_LOG = "/home/neonflake/packproof/upload_log.json"
 
 
 # -----------------------------------------------------
@@ -22,81 +28,115 @@ def log(msg):
 
 
 # -----------------------------------------------------
-# FULLSCREEN POPUP (if GUI exists)
+# ADD LOST VIDEOS TO UPLOAD QUEUE
 # -----------------------------------------------------
-def show_shutdown_popup():
+def recover_pending_videos():
+    data = {"pending": [], "uploaded": []}
+
+    # Load existing log
+    if os.path.exists(UPLOAD_LOG):
+        try:
+            with open(UPLOAD_LOG, "r") as f:
+                data = json.load(f)
+        except:
+            pass
+
+    # Scan video folder
+    for filename in os.listdir(VIDEO_DIR):
+        if filename.endswith(".mp4"):
+            order_id = filename.replace(".mp4", "")
+            log(f"Recovered video: {order_id}")
+            data["pending"].append({"id": order_id})
+
+    # Save updated log
+    with open(UPLOAD_LOG, "w") as f:
+        json.dump(data, f, indent=2)
+
+    log("Recovery completed.")
+
+
+# -----------------------------------------------------
+# SHUTDOWN SCREEN THREAD
+# -----------------------------------------------------
+def show_shutdown_screen_thread():
+    import tkinter as tk
+
+    root = tk.Tk()
+    root.overrideredirect(True)
+    root.attributes("-topmost", True)
+
+    w = root.winfo_screenwidth()
+    h = root.winfo_screenheight()
+    root.geometry(f"{w}x{h}+0+0")
+    root.configure(bg="black")
+
+    title = tk.Label(
+        root,
+        text="SWITCHING OFF",
+        font=("Arial", 120, "bold"),
+        fg="white",
+        bg="black"
+    )
+    title.pack(expand=True)
+
+    saving = tk.Label(
+        root,
+        text="Saving data",
+        font=("Arial", 50),
+        fg="white",
+        bg="black"
+    )
+    saving.pack(pady=50)
+
+    dots = ["", ".", "..", "..."]
+    i = 0
+
+    def animate():
+        nonlocal i
+        saving.config(text=f"Saving data{dots[i]}")
+        i = (i + 1) % 4
+        saving.after(400, animate)
+
+    animate()
+    root.mainloop()
+
+
+def show_shutdown_screen():
     if "DISPLAY" not in os.environ:
-        log("DISPLAY not found — skipping popup.")
-        return None
+        log("DISPLAY missing — skipping GUI.")
+        return
 
-    try:
-        import tkinter as tk
-
-        root = tk.Tk()
-        root.attributes("-fullscreen", True)
-        root.configure(bg="white")
-        root.attributes("-topmost", True)
-
-        message = (
-            "⚠ POWER LOST ⚠\n\n"
-            "Saving Video…\n"
-            "System will Shut Down Safely."
-        )
-
-        label = tk.Label(
-            root,
-            text=message,
-            font=("Arial", 70, "bold"),
-            fg="red",
-            bg="white",
-            justify="center"
-        )
-        label.pack(expand=True)
-
-        root.update()
-        return root
-
-    except Exception as e:
-        log(f"Popup error: {e}")
-        return None
+    t = threading.Thread(target=show_shutdown_screen_thread, daemon=True)
+    t.start()
+    log("Shutdown screen started.")
 
 
 # -----------------------------------------------------
-# FINALIZE RECORDING + SHUTDOWN
+# FINALIZE VIDEO & SHUTDOWN
 # -----------------------------------------------------
 def finalize_and_shutdown():
-    log("Power lost >= 10 seconds — initiating safe shutdown.")
+    log("Power lost → safe shutdown started.")
 
-    # 1. Fullscreen popup
-    popup = show_shutdown_popup()
+    show_shutdown_screen()
 
-    # 2. Stop ffmpeg safely
     try:
         subprocess.call(["pkill", "-2", "ffmpeg"])
-        log("Sent SIGINT to ffmpeg for finalizing video.")
-    except Exception as e:
-        log(f"Failed to signal ffmpeg: {e}")
+        log("Stopped ffmpeg safely.")
+    except:
+        pass
 
-    time.sleep(2)
-
-    # 3. Sync filesystem
-    try:
-        subprocess.call(["sync"])
-        log("Filesystem sync complete.")
-    except Exception as e:
-        log(f"sync() failed: {e}")
-
-    # 4. Shutdown
-    try:
-        subprocess.call(["sudo", "shutdown", "-h", "now"])
-    except Exception as e:
-        log(f"Shutdown failed: {e}")
+    time.sleep(3)
+    subprocess.call(["sync"])
+    subprocess.call(["sudo", "shutdown", "-h", "now"])
 
 
 # -----------------------------------------------------
-# MAIN MONITOR
+# MAIN LOOP
 # -----------------------------------------------------
 def main():
+    # 🔥 RECOVER LOST VIDEOS ON STARTUP
+    recover_pending_videos()
+
     try:
         chip = lgpio.gpiochip_open(CHIP)
     except Exception as e:
@@ -110,49 +150,40 @@ def main():
         lgpio.gpiochip_close(chip)
         sys.exit(1)
 
-    log("Power monitor started.")
-    log(f"Shutdown timeout = {TIMEOUT_SECONDS} seconds")
+    log("Power monitor running.")
+    log(f"Timeout = {TIMEOUT_SECONDS}s")
 
     mains_off_since = None
-    last_state = lgpio.gpio_read(chip, POWER_PIN)
-    log(f"Initial state = {last_state}")
 
     try:
         while True:
-            current = lgpio.gpio_read(chip, POWER_PIN)
+            state = lgpio.gpio_read(chip, POWER_PIN)
 
-            # mains present
-            if current == 1:
+            if state == 1:
+                # 🔥 if power just returned → recover AGAIN
                 if mains_off_since is not None:
-                    log("Mains returned — countdown cancelled.")
+                    log("Power returned → recovering videos.")
+                    recover_pending_videos()
+
                 mains_off_since = None
 
-            # mains lost
             else:
                 if mains_off_since is None:
                     mains_off_since = time.time()
-                    log("Mains is OFF — 10 second countdown started.")
-                else:
-                    elapsed = time.time() - mains_off_since
-                    if elapsed >= TIMEOUT_SECONDS:
-                        finalize_and_shutdown()
-                        mains_off_since = None
+                    log("Power lost → countdown started.")
 
-            last_state = current
+                elif time.time() - mains_off_since >= TIMEOUT_SECONDS:
+                    finalize_and_shutdown()
+                    mains_off_since = None
+
             time.sleep(0.2)
 
     except KeyboardInterrupt:
         log("Monitor stopped manually.")
 
-    except Exception as e:
-        log(f"Exception: {e}")
-
     finally:
-        try:
-            lgpio.gpiochip_close(chip)
-        except:
-            pass
-        log("Power monitor stopped.")
+        lgpio.gpiochip_close(chip)
+        log("GPIO released. Power monitor stopped.")
 
 
 if __name__ == "__main__":
