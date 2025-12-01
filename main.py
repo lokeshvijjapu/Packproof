@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 import tkinter as tk
 from tkinter import ttk
@@ -38,7 +39,6 @@ ENTRY_IPADY     = 32
 # Helpers - nmcli check
 # =========================
 def run_cmd_list(cmd_list, timeout=4):
-    """Run command list and return (rc, stdout)."""
     try:
         p = subprocess.run(cmd_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout)
         return p.returncode, p.stdout.strip()
@@ -46,14 +46,12 @@ def run_cmd_list(cmd_list, timeout=4):
         return 1, ""
 
 def check_online():
-    """Return True when any active WiFi connection exists (nmcli)."""
-    # first try to get active wifi line
     rc, out = run_cmd_list(["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"])
     if rc == 0 and out:
         for line in out.splitlines():
-            if line.startswith("yes:") or line.startswith("yes:"):
+            if line.startswith("yes:"):
                 return True
-    # fallback: check device connection
+
     rc2, out2 = run_cmd_list(["nmcli", "-t", "-f", "STATE", "general"])
     if rc2 == 0 and "connected" in out2.lower():
         return True
@@ -64,30 +62,30 @@ def check_online():
 # =========================
 def add_to_upload_queue(order_id: str):
     data = {"pending": [], "uploaded": []}
+
     if os.path.exists(LOG_FILE):
         try:
             with open(LOG_FILE, "r") as f:
                 data = json.load(f)
         except:
             pass
-    if not any(e.get("id") == order_id for e in data["pending"]):
-        data["pending"].append({"id": order_id})
-        with open(LOG_FILE, "w") as f:
-            json.dump(data, f, indent=2)
-        print(f"[queue] Added {order_id}")
+
+    # Always add new upload job (Order IDs may repeat)
+    data["pending"].append({"id": order_id})
+
+    with open(LOG_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
 # =========================
-# Numeric keypad (full screen)
+# Numeric keypad
 # =========================
 class NumericKeypad(tk.Toplevel):
     def __init__(self, master, target_entry, on_close_cb=None):
         super().__init__(master)
         self.target = target_entry
         self.on_close_cb = on_close_cb
-
         self.overrideredirect(True)
         self.configure(bg="white")
-        # make large enough to cover most displays; you can change for your exact screen.
         self.geometry("1280x720+0+0")
         self.after(50, lambda: self.grab_set())
 
@@ -101,9 +99,8 @@ class NumericKeypad(tk.Toplevel):
 
         self.var = tk.StringVar(value=self.target.get())
 
-        entry = tk.Entry(root, textvariable=self.var,
-                         font=("Arial", 36), justify="center",
-                         relief="solid", bd=4)
+        entry = tk.Entry(root, textvariable=self.var, font=("Arial", 36),
+                         justify="center", relief="solid", bd=4)
         entry.grid(row=0, column=0, columnspan=3, sticky="nsew", pady=10, padx=12)
 
         def mk_btn(txt, cmd, r, c):
@@ -143,19 +140,15 @@ class NumericKeypad(tk.Toplevel):
         self.target.insert(0, self.var.get())
         self.close_only()
     def close_only(self):
-        try:
-            self.grab_release()
-        except:
-            pass
+        try: self.grab_release()
+        except: pass
         self.destroy()
         if self.on_close_cb:
-            try:
-                self.on_close_cb()
-            except:
-                pass
+            try: self.on_close_cb()
+            except: pass
 
 # =========================
-# Main app
+# Main App
 # =========================
 class RecorderApp:
     def __init__(self, master):
@@ -163,29 +156,23 @@ class RecorderApp:
         master.configure(bg="white")
         master.bind("<Escape>", lambda e: master.destroy())
 
-        # style for start button (reduced padding to ensure it fits)
         self.style = ttkbs.Style()
         self.style.configure(
             "Start.TButton",
             font=(BTN_FONT_FAMILY, BTN_FONT_SIZE, "bold"),
             background="#FF8C00",
             foreground="black",
-            padding=(20, 45)   # reduced from very large so text fits
+            padding=(20, 45)
         )
-        self.style.map("Start.TButton",
-                       background=[("active", "#FF8C00"),
-                                   ("pressed", "#FF8C00"),
-                                   ("hover", "#FF8C00")])
 
-        # picamera2 initialization only if available
         if Picamera2:
             try:
                 self.picam2 = Picamera2()
-                self.preview_cfg = self.picam2.create_preview_configuration(main={"size": (640, 480)})
-                self.video_cfg = self.picam2.create_video_configuration(main={"size": (640, 480)})
+                self.preview_cfg = self.picam2.create_preview_configuration(main={"size": (1280, 720)})
+                self.video_cfg   = self.picam2.create_video_configuration(main={"size": (1280, 720)})
                 self.picam2.configure(self.preview_cfg)
                 self.picam2.start()
-            except Exception:
+            except:
                 self.picam2 = None
         else:
             self.picam2 = None
@@ -194,64 +181,55 @@ class RecorderApp:
         self.preview_running = False
 
         self.build_home()
-
-        # start online checker loop
         self.master.after(800, self.update_online_status)
 
+    # HOME ====================
     def build_home(self):
         for w in self.master.winfo_children():
             w.destroy()
 
-        # top bar
         top = tk.Frame(self.master, bg="white")
         top.pack(fill="x", side="top")
 
-        # ONLINE/OFFLINE label (solid dot + text)
         self.online_label = tk.Label(top, text="● ONLINE", font=("Arial", 36, "bold"),
                                      bg="white", fg="black")
         self.online_label.pack(side="left", padx=20, pady=10)
 
-        # large settings icon
         tk.Button(top, text="⚙️", font=("Arial", 72, "bold"),
                   bg="white", fg="black", relief="flat",
                   command=self.open_settings).pack(side="right", padx=24, pady=8)
 
-        # main wrapper - reduced top/bottom padding to make space
         wrapper = tk.Frame(self.master, bg="white")
         wrapper.pack(fill="both", expand=True, padx=36, pady=(8,18))
 
         tk.Label(wrapper, text="Enter Order ID", font=TITLE_FONT, bg="white").pack(pady=(10, 18))
 
-        # thick black border frame
         border_frame = tk.Frame(wrapper, bg="black", bd=10, relief="solid")
         border_frame.pack(fill="x", pady=(6, 30))
 
         self.id_entry = tk.Entry(border_frame, font=ENTRY_FONT, justify="center",
                                  bg="white", fg="black", relief="flat")
         self.id_entry.pack(fill="x", ipady=ENTRY_IPADY, ipadx=18)
-
-        # keypad should open only when tapping the entry
         self.id_entry.bind("<Button-1>", lambda e: self.open_keypad())
 
-        # START button - ensure visible by using pack after packing wrapper; give some vertical padding
         ttkbs.Button(wrapper, text="START RECORDING", style="Start.TButton",
                      command=self.start_recording).pack(fill="x", pady=(20, 28))
 
+    # ONLINE STATUS ====================
     def update_online_status(self):
         try:
             online = check_online()
-        except Exception:
+        except:
             online = False
 
         if online:
-            # green dot + ONLINE text (solid bullet)
-            self.online_label.config(text="●  ONLINE", fg="green")
+            self.online_label.config(text="● ONLINE", fg="green")
         else:
-            self.online_label.config(text="●  OFFLINE", fg="red")
+            self.online_label.config(text="● OFFLINE", fg="red")
 
-        # schedule again
         self.master.after(3000, self.update_online_status)
 
+    # SETTINGS ====================
     def open_settings(self):
         for w in self.master.winfo_children():
             w.destroy()
@@ -261,53 +239,88 @@ class RecorderApp:
 
         tk.Label(top, text="Settings", font=TITLE_FONT, bg="white").pack(side="left", padx=24, pady=12)
 
-        tk.Button(top, text="⬅", font=("Arial", 48), bg="white", relief="flat",
-                  command=self.build_home).pack(side="right", padx=20, pady=12)
+        tk.Button(top, text="⬅", font=("Arial", 48), bg="white",
+                  relief="flat", command=self.build_home).pack(side="right", padx=20, pady=12)
 
         wrapper = tk.Frame(self.master, bg="white")
         wrapper.pack(fill="both", expand=True, padx=36, pady=36)
 
-        # large option buttons
         self.big_button(wrapper, "SET CAMERA ANGLE", self.show_preview).pack(fill="x", pady=20)
         self.big_button(wrapper, "WI-FI SETTINGS", self.open_wifi).pack(fill="x", pady=20)
         self.big_button(wrapper, "BACK", self.build_home).pack(fill="x", pady=20)
 
     def open_wifi(self):
-        # launch wifi.py in background, keep main app running
-        # adjust path if your wifi.py is in /home/neonflake/codes/wifi.py
         try:
             subprocess.Popen(["python3", "/home/neonflake/codes/wifi.py"])
         except Exception as e:
             print("Failed to launch wifi UI:", e)
 
+    # PREVIEW ====================
     def show_preview(self):
         for w in self.master.winfo_children():
             w.destroy()
 
-        frame = tk.Frame(self.master, bg="white")
-        frame.pack(fill="both", expand=True)
+        # Full screen black background
+        self.preview_frame = tk.Frame(self.master, bg="black")
+        self.preview_frame.pack(fill="both", expand=True)
 
-        self.preview_label = tk.Label(frame, bg="white")
-        self.preview_label.pack(expand=True, fill="both")
+        # Live camera label
+        self.preview_label = tk.Label(self.preview_frame, bg="black")
+        self.preview_label.pack(fill="both", expand=True)
 
-        self.big_button(frame, "STOP PREVIEW", self.build_home).pack(fill="x", pady=18)
+        # === BACK BUTTON OVERLAY (bottom-center) ===
+        back_btn = tk.Button(
+            self.preview_frame,
+            text="BACK",
+            font=("Arial", 40, "bold"),
+            bg="#8a2b2b",
+            fg="white",
+            relief="flat",
+            command=self.stop_preview_and_back
+        )
+        back_btn.place(relx=0.5, rely=0.93, anchor="center", width=380, height=100)
 
         self.preview_running = True
         self._update_preview()
 
+    def stop_preview_and_back(self):
+        self.preview_running = False
+        self.build_settings_return()
+
+    def build_settings_return(self):
+        self.open_settings()
+
     def _update_preview(self):
         if not self.preview_running:
             return
+
         if self.picam2:
             try:
                 frame = self.picam2.capture_array()
-                img = ImageTk.PhotoImage(Image.fromarray(frame))
-                self.preview_label.config(image=img)
-                self.preview_label.image = img
-            except Exception:
-                pass
-        self.master.after(120, self._update_preview)
+                img = Image.fromarray(frame)
 
+                screen_w, screen_h = 1280, 720
+                img_w, img_h = img.size
+                ratio = max(screen_w / img_w, screen_h / img_h)
+
+                new_w = int(img_w * ratio)
+                new_h = int(img_h * ratio)
+                img = img.resize((new_w, new_h), Image.LANCZOS)
+
+                left = (new_w - screen_w) // 2
+                top = (new_h - screen_h) // 2
+                img = img.crop((left, top, left + screen_w, top + screen_h))
+
+                tk_img = ImageTk.PhotoImage(img)
+                self.preview_label.config(image=tk_img)
+                self.preview_label.image = tk_img
+
+            except Exception as e:
+                print("Preview error:", e)
+
+        self.master.after(60, self._update_preview)
+
+    # RECORDING ====================
     def start_recording(self):
         oid = self.id_entry.get().strip()
         if not oid:
@@ -333,7 +346,6 @@ class RecorderApp:
                 self.show_alert("Error", "Failed to start recording")
                 return
         else:
-            # if camera not available, just create an empty placeholder file
             open(outfile, "wb").close()
 
         self.build_record_screen(oid)
@@ -384,6 +396,7 @@ class RecorderApp:
 
         self.build_home()
 
+    # KEYPAD ====================
     def open_keypad(self):
         if self.keypad_open:
             return
@@ -414,7 +427,6 @@ class RecorderApp:
 # =========================
 if __name__ == "__main__":
     root = ttkbs.Window(themename="flatly")
-    # use after to set fullscreen reliably
     root.after(50, lambda: root.attributes("-fullscreen", True))
     RecorderApp(root)
     root.mainloop()
