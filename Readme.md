@@ -255,38 +255,89 @@ System will Shut Down Safely.
 
 ---
 
-# 🔌 IRL540N MOSFET Auto-ON Circuit 
+🔥 Relay-Based Automatic Safe Power Control (Updated Circuit)
 
-This circuit ensures:
+This new relay circuit replaces the old MOSFET RUN-pin design.
 
-* Pi **auto-turns ON** when power returns
-* Pi **does NOT reboot** if the user presses the button when already ON
-* No mechanical switch required on UPS output
+It ensures:
 
-### ✔ Your confirmed connection diagram:
+✔ Pi turns ON whenever adapter power is available
 
-```
-UPS IN+ ───────► (+) 10µF capacitor
-                     │
-                     └────────► Gate of IRL540N
+✔ Pi stays powered on battery during shutdown
 
-Gate ────► 10kΩ resistor ───► GND
+✔ Pi is completely disconnected after shutdown
 
-IRL540N Source ─────────────► GND
+✔ Battery does NOT drain overnight
 
-IRL540N Drain ───► 1kΩ ───► RUN pin (Pi)
-```
+✔ Pi auto-boots again when adapter power returns
 
-### ⚙ How it works
+🧲 Step-by-Step Wiring — Final Verified Circuit
 
-* When **mains returns**, the capacitor sends a short pulse to gate ⇒ MOSFET conducts ⇒ pulses RUN pin ⇒ Pi boots
-* When Pi is **ON**, the gate is discharged by 10k resistor ⇒ no unwanted pulses
-* Pressing your main switch does NOT restart Pi
-* Only UPS power returning causes reboot
+Below is the full wiring description of your working circuit.
 
-This is a clean and safe solution for automatic boot.
+🔹 UPS Module Connections
 
----
+Adapter +5V → UPS IN+
+
+Adapter GND → UPS IN-
+
+Battery + → UPS B+
+
+Battery – → UPS B-
+
+Pi power comes from UPS OUT+ / OUT- (through relay)
+
+🔹 Relay Coil Driver (BC547)
+
+Relay coil + connects to UPS OUT+
+
+Relay coil – connects to BC547 collector
+
+BC547 emitter connects to GND
+
+Flyback diode:
+
+1N4007 diode across relay coil
+
+Stripe (cathode) → relay coil + (UPS OUT+)
+
+Non-stripe (anode) → relay coil – (BC547 collector)
+
+This protects the transistor.
+
+🔹 Base Drive Logic (to keep relay ON during shutdown)
+
+UPS IN+ connects to BC547 base through a 4.7k resistor
+
+This keeps the relay ON whenever adapter power is available.
+
+GPIO6 connects to a diode (1N4148 or 1N4007)
+
+Anode → GPIO6
+
+Cathode (stripe) → 2.2k resistor → BC547 base
+
+This keeps the relay ON while the Pi is ON.
+
+A 100k resistor connects BC547 base to GND
+
+Ensures the transistor turns OFF cleanly when both power and GPIO6 go LOW.
+
+🔹 Relay Contact Connections
+
+Relay NO (Normally Open) → UPS OUT+
+
+Relay COM → Pi 5V input (GPIO pin 2 or 4)
+
+Relay NC is not used
+
+UPS OUT- → Pi GND
+
+This ensures:
+
+When relay is ON → Pi gets 5V
+
+When relay is OFF → Pi is fully isolated (0V drain)
 
 # 🎞 **main.py — Recorder Application**
 
